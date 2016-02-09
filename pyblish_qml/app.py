@@ -8,12 +8,10 @@ import threading
 
 # Dependencies
 from PyQt5 import QtCore, QtGui, QtQuick, QtTest
+import pyblish.api
 
 # Local libraries
-import util
-import compat
-import server
-import control
+from . import util, compat, server, control
 
 from pyblish_qml import settings
 
@@ -33,7 +31,7 @@ class Window(QtQuick.QQuickView):
         self.setTitle(settings.WindowTitle)
         self.setResizeMode(self.SizeRootObjectToView)
 
-        self.setSize(*settings.WindowSize)
+        self.resize(*settings.WindowSize)
         self.setMinimumSize(QtCore.QSize(430, 300))
 
     def event(self, event):
@@ -53,10 +51,6 @@ class Window(QtQuick.QQuickView):
                 self.parent.hide()
 
         return super(Window, self).event(event)
-
-    def setSize(self, width, height):
-        self.setWidth(width)
-        self.setHeight(height)
 
 
 class Application(QtGui.QGuiApplication):
@@ -197,7 +191,7 @@ class Application(QtGui.QGuiApplication):
         """The process is running solo"""
         self.app_message.emit("Running standalone")
         if not hasattr(self, "__debugging__"):
-            print "Quitting due to loneliness"
+            print("Quitting due to loneliness")
             time.sleep(1)
             self.quit()
 
@@ -252,6 +246,7 @@ in order to bypass validation.
     util.echo("Starting Pyblish..")
     util.timer("application")
 
+    # debug mode
     if debug:
         app = Application(source or APP_PATH)
         app.listen()
