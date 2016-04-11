@@ -243,6 +243,60 @@ def test_cooperative_collection():
 
 
 @with_setup(lib.clean)
+def test_argumentless_plugin():
+    """Implicit plug-ins without arguments should still run"""
+    count = {"#": 0}
+
+    class MyPlugin(pyblish.api.Validator):
+        def process(self):
+            count["#"] += 1
+
+    pyblish.api.register_plugin(MyPlugin)
+
+    c = reset()
+    publish(c)
+
+    check_present("MyPlugin", c.item_model)
+
+    assert count["#"] == 1
+
+
+@with_setup(lib.clean)
+def test_cooperative_collection2():
+    """Cooperative collection works with InstancePlugin"""
+
+    count = {"#": 0}
+    history = []
+
+    class CollectorA(pyblish.api.ContextPlugin):
+        order = pyblish.api.CollectorOrder
+
+        def process(self, context):
+            history.append(type(self).__name__)
+            context.create_instance("MyInstance")
+            count["#"] += 1
+
+    class CollectorB(pyblish.api.InstancePlugin):
+        order = pyblish.api.CollectorOrder + 0.1
+
+        def process(self, instance):
+            history.append(type(self).__name__)
+            count["#"] += 10
+
+    pyblish.api.register_plugin(CollectorA)
+    pyblish.api.register_plugin(CollectorB)
+
+    c = reset()
+
+    check_present("CollectorA", c.item_model)
+    check_present("CollectorB", c.item_model)
+    check_present("MyInstance", c.item_model)
+
+    assert count["#"] == 11, count
+    assert history == ["CollectorA", "CollectorB"]
+
+
+@with_setup(lib.clean)
 def test_published_event():
     """published is emitted upon finished publish"""
 
@@ -276,3 +330,50 @@ def test_validated_event():
     validate(c)
 
     assert count["#"] == 1, count
+
+
+@with_setup(lib.clean)
+def test_gui_vs_host_order():
+    """gui order is the same as the host order"""
+
+    class Collector(pyblish.api.Collector):
+
+        def process(self, context):
+            instance = context.create_instance("AC")
+            instance.set_data("family", "FamilyA")
+            instance = context.create_instance("AB")
+            instance.set_data("family", "FamilyA")
+
+            instance = context.create_instance("BC")
+            instance.set_data("family", "FamilyB")
+            instance = context.create_instance("BA")
+            instance.set_data("family", "FamilyB")
+
+    class CollectSorting(pyblish.api.Collector):
+        """ Sorts the context by family and name """
+
+        order = pyblish.api.Collector.order + 0.1
+
+        def process(self, context):
+
+            context[:] = sorted(context,
+                                key=lambda instance: (instance.data("family"),
+                                                      instance.data("name")))
+
+    pyblish.api.register_plugin(Collector)
+    pyblish.api.register_plugin(CollectSorting)
+
+    c = reset()
+
+    host_order = []
+    for instance in c.host.context():
+        host_order.append(str(instance))
+
+    gui_order = []
+    for item in c.item_model.items:
+        if item.itemType == 'instance' and str(item) != 'Context':
+            gui_order.append(str(item.id))
+
+    msg = "\n%s >> GUI order" % gui_order
+    msg += "\n%s >> Host order" % host_order
+    assert host_order == gui_order, msg
